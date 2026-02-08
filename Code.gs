@@ -833,13 +833,6 @@ function onOpen() {
     .addItem('Setup trigger cho checkbox (QUAN TRỌNG)', 'setupCheckboxTrigger')
     .addToUi();
   
-  // Tạo menu cho tính năng nhắc nhở
-  ui.createMenu('🔔 Nhắc Nhở')
-    .addItem('Thêm cột Joined Date và Date nhắc nhở', 'addReminderColumns')
-    .addItem('Cập nhật Date nhắc nhở cho tất cả', 'updateAllReminderDates')
-    .addItem('Bật/Tắt border nhấp nháy', 'toggleBlinkingBorder')
-    .addToUi();
-  
   // Tự động tạo button nếu chưa có
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Danh_sach_nhan_vien');
   if (sheet) {
@@ -852,9 +845,6 @@ function onOpen() {
       }
     }
   }
-  
-  // Tự động kiểm tra và cập nhật reminder dates khi mở sheet
-  checkAndUpdateReminderBorders();
 }
 
 /**
@@ -920,458 +910,80 @@ function onEdit(e) {
   const sheet = e.source.getActiveSheet();
   const range = e.range;
   
-  // Chỉ xử lý khi edit trong sheet Danh_sach_nhan_vien
-  if (sheet.getName() === 'Danh_sach_nhan_vien') {
+  // Chỉ xử lý khi edit trong sheet Danh_sach_nhan_vien, cột E (cột 5)
+  if (sheet.getName() === 'Danh_sach_nhan_vien' && range.getColumn() === 5) {
     const row = range.getRow();
-    const col = range.getColumn();
     
-    // Xử lý checkbox trong cột E (cột 5)
-    if (col === 5) {
-      // Bỏ qua header row (row 2)
-      if (row < 3) {
-        return;
-      }
+    // Bỏ qua header row (row 2)
+    if (row < 3) {
+      return;
+    }
+    
+    const cellValue = range.getValue();
+    
+    // Xử lý khi checkbox được check (value = true)
+    if (cellValue === true) {
+      const employeeIdRaw = sheet.getRange(row, 1).getValue();
       
-      const cellValue = range.getValue();
+      // Xử lý employeeId có thể có dấu nháy đơn
+      const employeeId = employeeIdRaw ? employeeIdRaw.toString().replace(/'/g, '') : '';
       
-      // Xử lý khi checkbox được check (value = true)
-      if (cellValue === true) {
-        const employeeIdRaw = sheet.getRange(row, 1).getValue();
-        
-        // Xử lý employeeId có thể có dấu nháy đơn
-        const employeeId = employeeIdRaw ? employeeIdRaw.toString().replace(/'/g, '') : '';
-        
-        if (employeeId) {
-          try {
-            Logger.log(`Checkbox được check cho nhân viên: ${employeeId}`);
-            const result = sendSalaryEmailForEmployee(employeeId);
-            
-            // Uncheck checkbox sau khi gửi
-            range.setValue(false);
-            
-            // Kiểm tra kết quả và cập nhật vào cột F (nếu chưa được cập nhật trong hàm sendSalaryEmailForEmployee)
-            const statusCell = sheet.getRange(row, 6); // Cột F
-            if (!statusCell.getValue() || statusCell.getValue() === '') {
-              if (result.includes('thành công')) {
-                statusCell.setValue('Đã gửi: ' + new Date().toLocaleString('vi-VN'));
-                statusCell.setFontColor('#0f9d58');
-              } else if (result.includes('Lỗi')) {
-                statusCell.setValue(result);
-                statusCell.setFontColor('#ea4335');
-              }
-            }
-            
-            // Hiển thị thông báo (không bắt buộc)
-            try {
-              SpreadsheetApp.getUi().alert(result);
-            } catch (uiError) {
-              Logger.log('Không thể hiển thị alert UI: ' + uiError.toString());
-              Logger.log('Kết quả: ' + result);
-            }
-          } catch (error) {
-            const errorMsg = 'Lỗi: ' + error.toString();
-            Logger.log('Lỗi khi gửi email: ' + errorMsg);
-            
-            // Ghi lỗi vào cột F
-            const statusCell = sheet.getRange(row, 6); // Cột F
-            statusCell.setValue(errorMsg);
-            statusCell.setFontColor('#ea4335');
-            
-            // Uncheck checkbox
-            range.setValue(false);
-            
-            // Hiển thị thông báo (không bắt buộc)
-            try {
-              SpreadsheetApp.getUi().alert(errorMsg);
-            } catch (uiError) {
-              Logger.log('Không thể hiển thị alert UI: ' + uiError.toString());
+      if (employeeId) {
+        try {
+          Logger.log(`Checkbox được check cho nhân viên: ${employeeId}`);
+          const result = sendSalaryEmailForEmployee(employeeId);
+          
+          // Uncheck checkbox sau khi gửi
+          range.setValue(false);
+          
+          // Kiểm tra kết quả và cập nhật vào cột F (nếu chưa được cập nhật trong hàm sendSalaryEmailForEmployee)
+          const statusCell = sheet.getRange(row, 6); // Cột F
+          if (!statusCell.getValue() || statusCell.getValue() === '') {
+            if (result.includes('thành công')) {
+              statusCell.setValue('Đã gửi: ' + new Date().toLocaleString('vi-VN'));
+              statusCell.setFontColor('#0f9d58');
+            } else if (result.includes('Lỗi')) {
+              statusCell.setValue(result);
+              statusCell.setFontColor('#ea4335');
             }
           }
-        } else {
-          range.setValue(false);
-          const errorMsg = 'Không tìm thấy mã nhân viên ở dòng ' + row;
-          Logger.log(errorMsg);
+          
+          // Hiển thị thông báo (không bắt buộc)
+          try {
+            SpreadsheetApp.getUi().alert(result);
+          } catch (uiError) {
+            Logger.log('Không thể hiển thị alert UI: ' + uiError.toString());
+            Logger.log('Kết quả: ' + result);
+          }
+        } catch (error) {
+          const errorMsg = 'Lỗi: ' + error.toString();
+          Logger.log('Lỗi khi gửi email: ' + errorMsg);
           
           // Ghi lỗi vào cột F
           const statusCell = sheet.getRange(row, 6); // Cột F
           statusCell.setValue(errorMsg);
           statusCell.setFontColor('#ea4335');
+          
+          // Uncheck checkbox
+          range.setValue(false);
+          
+          // Hiển thị thông báo (không bắt buộc)
+          try {
+            SpreadsheetApp.getUi().alert(errorMsg);
+          } catch (uiError) {
+            Logger.log('Không thể hiển thị alert UI: ' + uiError.toString());
+          }
         }
-      }
-    }
-    
-    // Xử lý khi chỉnh sửa Joined Date (cột F - cột 6)
-    // Cập nhật lại Date nhắc nhở tự động
-    if (col === 6 && row >= 3) {
-      updateReminderDateForRow(sheet, row);
-      // Cập nhật lại border nhấp nháy
-      checkAndUpdateReminderBorders();
-    }
-  }
-}
-
-/**
- * ============================================
- * TÍNH NĂNG NHẮC NHỞ - REMINDER FEATURES
- * ============================================
- */
-
-/**
- * Thêm 2 cột mới: "Joined Date" (cột F) và "Date nhắc nhở" (cột G)
- * Cột F: Joined Date - Ngày nhân viên vào làm
- * Cột G: Date nhắc nhở - Ngày nhắc nhở (1 tháng trước ngày kỷ niệm 1 năm)
- */
-function addReminderColumns() {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Danh_sach_nhan_vien');
-  
-  if (!sheet) {
-    SpreadsheetApp.getUi().alert('Không tìm thấy sheet Danh_sach_nhan_vien');
-    return;
-  }
-  
-  // Kiểm tra xem đã có header chưa
-  const headerRow = 2;
-  
-  // Cột F: Joined Date
-  const joinedDateHeader = sheet.getRange(headerRow, 6); // F2
-  if (!joinedDateHeader.getValue() || joinedDateHeader.getValue() === '') {
-    joinedDateHeader.setValue('Joined Date');
-    joinedDateHeader.setFontWeight('bold');
-    joinedDateHeader.setBackground('#4CAF50');
-    joinedDateHeader.setFontColor('#FFFFFF');
-    joinedDateHeader.setHorizontalAlignment('center');
-  }
-  
-  // Cột G: Date nhắc nhở
-  const reminderDateHeader = sheet.getRange(headerRow, 7); // G2
-  if (!reminderDateHeader.getValue() || reminderDateHeader.getValue() === '') {
-    reminderDateHeader.setValue('Date nhắc nhở');
-    reminderDateHeader.setFontWeight('bold');
-    reminderDateHeader.setBackground('#4CAF50');
-    reminderDateHeader.setFontColor('#FFFFFF');
-    reminderDateHeader.setHorizontalAlignment('center');
-  }
-  
-  // Đặt format cho các cột date
-  const lastRow = sheet.getLastRow();
-  if (lastRow >= 3) {
-    // Format cột F (Joined Date) - dd/mm/yyyy
-    const joinedDateRange = sheet.getRange(3, 6, lastRow - 2, 1);
-    joinedDateRange.setNumberFormat('dd/mm/yyyy');
-    
-    // Format cột G (Date nhắc nhở) - dd/mm/yyyy
-    const reminderDateRange = sheet.getRange(3, 7, lastRow - 2, 1);
-    reminderDateRange.setNumberFormat('dd/mm/yyyy');
-  }
-  
-  SpreadsheetApp.getUi().alert('Đã thêm 2 cột:\n- Cột F: Joined Date\n- Cột G: Date nhắc nhở\n\nVui lòng nhập ngày vào làm cho từng nhân viên vào cột F.\nDate nhắc nhở sẽ được tính tự động.');
-}
-
-/**
- * Tính Date nhắc nhở dựa trên Joined Date
- * Logic: Joined Date + 1 năm (bao gồm 2 tháng thử việc) - 1 tháng
- * Ví dụ: Joined Date = 8/1/2025 => Anniversary = 8/1/2026 => Reminder = 7/1/2026
- * 
- * @param {Date} joinedDate - Ngày vào làm
- * @returns {Date} Ngày nhắc nhở (1 tháng trước ngày kỷ niệm 1 năm)
- */
-function calculateReminderDate(joinedDate) {
-  if (!joinedDate || !(joinedDate instanceof Date) || isNaN(joinedDate.getTime())) {
-    return null;
-  }
-  
-  // Tạo ngày kỷ niệm 1 năm (bao gồm 2 tháng thử việc)
-  const anniversaryDate = new Date(joinedDate);
-  anniversaryDate.setFullYear(anniversaryDate.getFullYear() + 1);
-  
-  // Trừ đi 1 tháng để có ngày nhắc nhở
-  const reminderDate = new Date(anniversaryDate);
-  reminderDate.setMonth(reminderDate.getMonth() - 1);
-  
-  return reminderDate;
-}
-
-/**
- * Cập nhật Date nhắc nhở cho một hàng cụ thể
- * @param {Sheet} sheet - Sheet object
- * @param {number} row - Số hàng (bắt đầu từ 1)
- */
-function updateReminderDateForRow(sheet, row) {
-  const joinedDateCell = sheet.getRange(row, 6); // Cột F
-  const reminderDateCell = sheet.getRange(row, 7); // Cột G
-  
-  const joinedDate = joinedDateCell.getValue();
-  
-  if (!joinedDate) {
-    reminderDateCell.setValue('');
-    return;
-  }
-  
-  // Chuyển đổi sang Date object nếu là string
-  let dateObj = joinedDate;
-  if (typeof joinedDate === 'string') {
-    // Thử parse định dạng dd/mm/yyyy hoặc mm/dd/yyyy
-    const parts = joinedDate.split('/');
-    if (parts.length === 3) {
-      // Giả sử định dạng dd/mm/yyyy
-      dateObj = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
-    } else {
-      dateObj = new Date(joinedDate);
-    }
-  }
-  
-  if (!(dateObj instanceof Date) || isNaN(dateObj.getTime())) {
-    reminderDateCell.setValue('');
-    return;
-  }
-  
-  const reminderDate = calculateReminderDate(dateObj);
-  if (reminderDate) {
-    reminderDateCell.setValue(reminderDate);
-  } else {
-    reminderDateCell.setValue('');
-  }
-}
-
-/**
- * Cập nhật Date nhắc nhở cho tất cả nhân viên
- */
-function updateAllReminderDates() {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Danh_sach_nhan_vien');
-  
-  if (!sheet) {
-    SpreadsheetApp.getUi().alert('Không tìm thấy sheet Danh_sach_nhan_vien');
-    return;
-  }
-  
-  const lastRow = sheet.getLastRow();
-  if (lastRow < 3) {
-    SpreadsheetApp.getUi().alert('Không có dữ liệu nhân viên');
-    return;
-  }
-  
-  let updatedCount = 0;
-  
-  for (let row = 3; row <= lastRow; row++) {
-    const employeeId = sheet.getRange(row, 1).getValue();
-    if (employeeId) {
-      updateReminderDateForRow(sheet, row);
-      updatedCount++;
-    }
-  }
-  
-  SpreadsheetApp.getUi().alert(`Đã cập nhật Date nhắc nhở cho ${updatedCount} nhân viên`);
-  
-  // Tự động kiểm tra và cập nhật border nhấp nháy
-  checkAndUpdateReminderBorders();
-}
-
-/**
- * Kiểm tra xem một nhân viên có đủ điều kiện để hiển thị border nhấp nháy không
- * Điều kiện: Ngày hiện tại >= Date nhắc nhở và <= Ngày kỷ niệm
- * 
- * @param {Date} reminderDate - Ngày nhắc nhở
- * @returns {boolean} true nếu đủ điều kiện
- */
-function shouldShowBlinkingBorder(reminderDate) {
-  if (!reminderDate || !(reminderDate instanceof Date) || isNaN(reminderDate.getTime())) {
-    return false;
-  }
-  
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  
-  const reminder = new Date(reminderDate);
-  reminder.setHours(0, 0, 0, 0);
-  
-  // Tính ngày kỷ niệm (reminderDate + 1 tháng)
-  const anniversary = new Date(reminder);
-  anniversary.setMonth(anniversary.getMonth() + 1);
-  
-  // Hiển thị border nếu hôm nay >= reminderDate và <= anniversary
-  return today >= reminder && today <= anniversary;
-}
-
-/**
- * Kiểm tra và cập nhật border nhấp nháy cho các hàng đủ điều kiện
- * Border sẽ có màu đỏ và nhấp nháy bằng cách toggle mỗi phút
- */
-function checkAndUpdateReminderBorders() {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Danh_sach_nhan_vien');
-  
-  if (!sheet) {
-    return;
-  }
-  
-  const lastRow = sheet.getLastRow();
-  if (lastRow < 3) {
-    return;
-  }
-  
-  // Lấy số cột cuối cùng có dữ liệu (ít nhất là cột G)
-  const lastCol = Math.max(7, sheet.getLastColumn());
-  
-  // Lấy trạng thái nhấp nháy từ PropertiesService
-  const properties = PropertiesService.getScriptProperties();
-  const sheetId = sheet.getSheetId().toString();
-  const stateKey = 'blinking_state_' + sheetId;
-  let blinkingState = {};
-  
-  try {
-    const stateStr = properties.getProperty(stateKey);
-    if (stateStr) {
-      blinkingState = JSON.parse(stateStr);
-    }
-  } catch (e) {
-    Logger.log('Lỗi khi đọc trạng thái nhấp nháy: ' + e.toString());
-  }
-  
-  for (let row = 3; row <= lastRow; row++) {
-    const employeeId = sheet.getRange(row, 1).getValue();
-    if (!employeeId) {
-      continue;
-    }
-    
-    const reminderDateCell = sheet.getRange(row, 7); // Cột G
-    const reminderDate = reminderDateCell.getValue();
-    
-    const shouldBlink = shouldShowBlinkingBorder(reminderDate);
-    
-    // Lấy range cho toàn bộ hàng (từ cột A đến cột cuối cùng)
-    const rowRange = sheet.getRange(row, 1, 1, lastCol);
-    
-    if (shouldBlink) {
-      // Toggle trạng thái nhấp nháy cho hàng này
-      const rowKey = row.toString();
-      if (blinkingState[rowKey] === undefined) {
-        blinkingState[rowKey] = false;
-      }
-      blinkingState[rowKey] = !blinkingState[rowKey];
-      
-      // Áp dụng border đỏ (nhấp nháy bằng cách toggle)
-      if (blinkingState[rowKey]) {
-        rowRange.setBorder(
-          true, // top
-          true, // left
-          true, // bottom
-          true, // right
-          true, // vertical
-          true, // horizontal
-          '#ea4335', // color - màu đỏ
-          SpreadsheetApp.BorderStyle.SOLID_THICK // style - dày hơn để dễ nhận biết
-        );
-        
-        // Thêm background color nhẹ để dễ nhận biết
-        rowRange.setBackground('#fff3cd'); // Màu vàng nhạt
       } else {
-        // Tắt border nhưng giữ background
-        rowRange.setBorder(
-          false, // top
-          false, // left
-          false, // bottom
-          false, // right
-          false, // vertical
-          false, // horizontal
-          null,
-          null
-        );
+        range.setValue(false);
+        const errorMsg = 'Không tìm thấy mã nhân viên ở dòng ' + row;
+        Logger.log(errorMsg);
         
-        // Giữ background color để vẫn dễ nhận biết
-        rowRange.setBackground('#fff3cd'); // Màu vàng nhạt
-      }
-    } else {
-      // Xóa border đặc biệt, để lại border mặc định
-      rowRange.setBorder(
-        false, // top
-        false, // left
-        false, // bottom
-        false, // right
-        false, // vertical
-        false, // horizontal
-        null,
-        null
-      );
-      
-      // Xóa background color
-      rowRange.setBackground(null);
-      
-      // Xóa trạng thái nhấp nháy
-      const rowKey = row.toString();
-      if (blinkingState[rowKey] !== undefined) {
-        delete blinkingState[rowKey];
+        // Ghi lỗi vào cột F
+        const statusCell = sheet.getRange(row, 6); // Cột F
+        statusCell.setValue(errorMsg);
+        statusCell.setFontColor('#ea4335');
       }
     }
-  }
-  
-  // Lưu trạng thái nhấp nháy
-  try {
-    properties.setProperty(stateKey, JSON.stringify(blinkingState));
-  } catch (e) {
-    Logger.log('Lỗi khi lưu trạng thái nhấp nháy: ' + e.toString());
-  }
-}
-
-/**
- * Toggle border nhấp nháy - Bật/Tắt tính năng border nhấp nháy
- * Tạo time-based trigger để tự động cập nhật border mỗi ngày và nhấp nháy mỗi phút
- */
-function toggleBlinkingBorder() {
-  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Danh_sach_nhan_vien');
-  
-  if (!sheet) {
-    SpreadsheetApp.getUi().alert('Không tìm thấy sheet Danh_sach_nhan_vien');
-    return;
-  }
-  
-  // Kiểm tra xem đã có trigger chưa
-  const triggers = ScriptApp.getProjectTriggers();
-  let hasDailyTrigger = false;
-  let hasMinuteTrigger = false;
-  
-  for (let i = 0; i < triggers.length; i++) {
-    const handler = triggers[i].getHandlerFunction();
-    if (handler === 'checkAndUpdateReminderBorders') {
-      if (triggers[i].getEventType() === ScriptApp.EventType.CLOCK) {
-        // Kiểm tra xem trigger chạy mỗi phút hay mỗi ngày
-        const triggerSource = triggers[i].getTriggerSource();
-        // Trigger chạy mỗi phút sẽ có triggerSourceId khác
-        hasMinuteTrigger = true;
-      } else {
-        hasDailyTrigger = true;
-      }
-    }
-  }
-  
-  if (hasMinuteTrigger || hasDailyTrigger) {
-    // Xóa tất cả trigger liên quan
-    for (let i = 0; i < triggers.length; i++) {
-      if (triggers[i].getHandlerFunction() === 'checkAndUpdateReminderBorders') {
-        ScriptApp.deleteTrigger(triggers[i]);
-      }
-    }
-    
-    // Xóa tất cả border nhấp nháy
-    const lastRow = sheet.getLastRow();
-    if (lastRow >= 3) {
-      const lastCol = Math.max(7, sheet.getLastColumn());
-      for (let row = 3; row <= lastRow; row++) {
-        const rowRange = sheet.getRange(row, 1, 1, lastCol);
-        rowRange.setBorder(false, false, false, false, false, false, null, null);
-        rowRange.setBackground(null);
-      }
-    }
-    
-    SpreadsheetApp.getUi().alert('Đã tắt tính năng border nhấp nháy');
-  } else {
-    // Tạo trigger chạy mỗi phút để tạo hiệu ứng nhấp nháy
-    ScriptApp.newTrigger('checkAndUpdateReminderBorders')
-      .timeBased()
-      .everyMinutes(1)
-      .create();
-    
-    // Chạy ngay lập tức để cập nhật border
-    checkAndUpdateReminderBorders();
-    
-    SpreadsheetApp.getUi().alert('Đã bật tính năng border nhấp nháy!\n\nBorder sẽ tự động nhấp nháy mỗi phút cho các hàng có Date nhắc nhở trong khoảng thời gian hiện tại.\n\nCác hàng sẽ được đánh dấu bằng border đỏ và background vàng nhạt.');
   }
 }
